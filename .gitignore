@@ -1,0 +1,5 @@
+meshes
+__pycache__
+results
+sionna-venv
+*.blend
