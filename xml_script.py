@@ -31,5 +31,5 @@ def longest_car_id(filename:str = 'data_cars.xml'):
     return(np.argmax(veh_arr))
             
 if __name__ =='__main__':
-    select_car_frames(filename='data_cars.xml',car_id=f'{longest_car_id(filename='data_cars.xml')}')
-    
+    print(select_car_frames(filename='scenario2/data_cars.xml',car_id='893'))
+    # print(longest_car_id('scenario2/data_cars.xml')) 
