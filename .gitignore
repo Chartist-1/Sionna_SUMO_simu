@@ -2,7 +2,6 @@ meshes
 __pycache__
 results
 sionna-venv
-*.blend
-scenarios
-
+scenarios_private
+*.png
 
