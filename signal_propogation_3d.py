@@ -1,16 +1,3 @@
-"""
-Signal Propagation Simulation for Vehicular Communication
-
-This script simulates wireless signal propagation between vehicles in a traffic scenario,
-calculates RSSI (Received Signal Strength Indicator), and renders visualization frames.
-
-Key Features:
-- Loads vehicle trajectory data from XML files
-- Simulates signal propagation using Sionna RT
-- Renders scene visualizations for each frame
-- Calculates and saves RSSI values between vehicles
-"""
-
 from xml_scripts import select_car_frames, longest_car_id
 import pandas as pd
 import drjit as dr
@@ -18,6 +5,7 @@ import mitsuba as mi
 import numpy as np
 import xml.etree.ElementTree as ET
 import math
+import os
 
 # Handle Sionna RT import with fallback installation
 try:
@@ -29,20 +17,18 @@ except ImportError as e:
 
 from sionna.rt import load_scene, PlanarArray, Transmitter, Receiver, Camera, PathSolver, ITURadioMaterial, SceneObject
 
-def signal_propogation(scenario: str = 'scenario', 
-                      resolution: list = [650, 500], 
-                      output_video_name: str = 'render', 
-                      main_car_id: str = '12',
-                      distance: int = 500,
-                      camera_default: bool = True):
+def signal_propagation_all_vehicles(scenario: str = 'scenario', 
+                                  resolution: list = [650, 500], 
+                                  output_video_name: str = 'render',
+                                  distance: int = 500,
+                                  camera_default: bool = True):
     """
-    Main function to simulate signal propagation between vehicles in a scenario.
+    Main function to simulate signal propagation between all vehicles in a scenario.
     
     Parameters:
     - scenario (str): Name of the scenario folder
     - resolution (list): Resolution for rendered frames [width, height]
     - output_video_name (str): Base name for output files
-    - main_car_id (str): ID of the main vehicle (receiver)
     - distance (int): Maximum communication distance between vehicles
     - camera_default (bool): Whether to use default camera view or custom
     """
@@ -52,21 +38,11 @@ def signal_propogation(scenario: str = 'scenario',
     tree = ET.parse(filename)
     root = tree.getroot()
 
-    # Determine which car to track (either specified or longest-lasting)
-    if main_car_id == '0':
-        car_id = f'{longest_car_id(filename=filename)}'
-    else:
-        car_id = main_car_id
+    # Determine frame range for simulation
+    start_frame = float(root[0].attrib.get('time'))
+    stop_frame = float(root[-1].attrib.get('time'))
 
-    # Set frame range for simulation (hardcoded for now)
-    # start_frame = 215
-    # stop_frame = 250
-    start_frame, stop_frame = select_car_frames(filename=f'scenarios/{scenario}/data_cars.xml',car_id= car_id)
-
-    print(f'Selected Car_ID: {car_id}, Frames of this car: {start_frame} {stop_frame}')
-    flag = input('Continue simulation y/n: ')
-    if flag == 'n':
-        return
+    print(f'Processing all vehicles in frames: {start_frame} to {stop_frame}')
 
     # Load the scene and configure antenna arrays
     scene = load_scene(f'scenarios/{scenario}/scenario.xml')
@@ -93,17 +69,21 @@ def signal_propogation(scenario: str = 'scenario',
                                   thickness=0.01,
                                   color=(0.8, 0.1, 0.1))
 
-    # Initialize data storage
-    rssi = []  # To store signal strength measurements
+    # Initialize data storage for all vehicles
+    all_rssi_data = {}  # Dictionary to store RSSI data for each vehicle
     frames = []  # To store frame timestamps
+
+    # Create directory for render frames if it doesn't exist
+    os.makedirs(f'scenarios/{scenario}/render_frames', exist_ok=True)
 
     # Process each frame in the simulation
     for stamp in root:
         vehicle = stamp.find('vehicle')
         
-        # Only process frames within our selected range that contain vehicles
-        if (vehicle is not None) and (float(stamp.attrib.get('time')) >= start_frame) and (float(stamp.attrib.get('time')) <= stop_frame):
-            print(f"Processing frame: {float(stamp.attrib.get('time'))}")
+        # Only process frames that contain vehicles
+        if vehicle is not None:
+            frame_time = float(stamp.attrib.get('time'))
+            print(f"Processing frame: {frame_time}")
             
             # Extract vehicle data for current frame
             veh_arr = []
@@ -116,61 +96,17 @@ def signal_propogation(scenario: str = 'scenario',
                     'angle': float(stamp[i].attrib.get('angle'))
                 })
 
-            # Find index of our main vehicle
-            for i in range(len(veh_arr)):
-                if int(veh_arr[i].get('vehId')) == int(car_id):
-                    main_car_id = i
-                    break
-
-            # Filter vehicles within communication distance
-            selected_cars = []
-            for i in range(len(veh_arr)):
-                dist = math.sqrt(
-                    (veh_arr[main_car_id]['x_coor'] - veh_arr[i]['x_coor'])**2 +
-                    (veh_arr[main_car_id]['y_coor'] - veh_arr[i]['y_coor'])**2 +
-                    (veh_arr[main_car_id]['z_coor'] - veh_arr[i]['z_coor'])**2
-                )
-                if dist < distance:
-                    selected_cars.append(veh_arr[i])
-
-            veh_arr = selected_cars.copy()
-
-            # Find index of our main vehicle
-            for i in range(len(veh_arr)):
-                if int(veh_arr[i].get('vehId')) == int(car_id):
-                    main_car_id = i
-                    break
+            # Initialize RSSI data for this frame
+            frame_rssi = {v['vehId']: {} for v in veh_arr}
             
             # Create 3D car models for visualization
             cars = [SceneObject(
                 fname=sionna.rt.scene.low_poly_car,
-                name=f'car{veh_arr[i]['vehId']}',
+                name=f'car{veh_arr[i]["vehId"]}',
                 radio_material=car_material
             ) for i in range(len(veh_arr))]
             
             scene.edit(add=cars)
-
-            # Set up camera view
-            if camera_default:
-                # Default camera follows the main car from above
-                cam = Camera(
-                    position=[
-                        (veh_arr[main_car_id]['x_coor']) + math.cos(float(-np.radians(veh_arr[main_car_id]['angle']+90))) * 200,
-                        (veh_arr[main_car_id]['y_coor']) + math.sin(float(-np.radians(veh_arr[main_car_id]['angle']+90))) * 200, 
-                        veh_arr[main_car_id]['z_coor'] + 200
-                    ],
-                    look_at=[
-                        veh_arr[main_car_id]['x_coor'],
-                        veh_arr[main_car_id]['y_coor'],
-                        veh_arr[main_car_id]['z_coor']
-                    ]
-                )
-            else:
-                # Custom camera position and orientation
-                cam = Camera(
-                    position=[-69.6934, 434.79, 594.99], 
-                    look_at=[579.051, -196.43, 29.058]
-                )
 
             # Position and orient all vehicles in the scene
             for i in range(len(veh_arr)):
@@ -182,27 +118,22 @@ def signal_propogation(scenario: str = 'scenario',
                 cars[i].orientation = mi.Point3f(float(veh_arr[i]['angle']), 0, 0)
                 cars[i].scaling = mi.Float(1.5)
                 
-                # Add transmitters and receiver (main car)
-                if i == main_car_id:
-                    scene.add(Receiver(
-                        f'rx-{i}',
-                        position=[veh_arr[i]['x_coor'], veh_arr[i]['y_coor'], veh_arr[i]['z_coor']+3],
-                        display_radius=2
-                    ))
-                else:
-                    scene.add(Transmitter(
-                        f'tx-{i}',
-                        position=[veh_arr[i]['x_coor'], veh_arr[i]['y_coor'], veh_arr[i]['z_coor']+3],
-                        display_radius=2
-                    ))
+                # Add all vehicles as both transmitters and receivers
+                scene.add(Transmitter(
+                    f'tx-{veh_arr[i]["vehId"]}',
+                    position=[veh_arr[i]['x_coor'], veh_arr[i]['y_coor'], veh_arr[i]['z_coor']+3],
+                    display_radius=2
+                ))
+                scene.add(Receiver(
+                    f'rx-{veh_arr[i]["vehId"]}',
+                    position=[veh_arr[i]['x_coor'], veh_arr[i]['y_coor'], veh_arr[i]['z_coor']+3],
+                    display_radius=2
+                ))
 
-            # Calculate signal paths and RSSI
-            p_solver = PathSolver()
-            paths = 0
-            frames.append(float(stamp.attrib.get('time')))
-            
-            if len(veh_arr) != 1:  # Only calculate if there are other vehicles
-                print('Calculating signal paths...')
+            # Calculate signal paths between all pairs of vehicles
+            if len(veh_arr) > 1:
+                print('Calculating signal paths between all vehicles...')
+                p_solver = PathSolver()
                 paths = p_solver(
                     scene=scene,
                     max_depth=4,
@@ -214,53 +145,101 @@ def signal_propogation(scenario: str = 'scenario',
                     seed=42
                 )
                 
-                # Extract channel impulse response and calculate power
-                a, _ = paths.cir(normalize_delays=False, out_type='numpy')
-                path_powers = np.abs(a)**2
-                total_power = np.sum(path_powers) 
-                total_power_log  = 10*np.log10(total_power)
-                rssi.append(total_power)
+                # Extract channel impulse response and calculate power for each pair
+                for i in range(len(veh_arr)):
+                    for j in range(len(veh_arr)):
+                        if i != j:
+                            # Calculate distance between vehicles
+                            dist = math.sqrt(
+                                (veh_arr[i]['x_coor'] - veh_arr[j]['x_coor'])**2 +
+                                (veh_arr[i]['y_coor'] - veh_arr[j]['y_coor'])**2 +
+                                (veh_arr[i]['z_coor'] - veh_arr[j]['z_coor'])**2
+                            )
+                            
+                            if dist < distance:
+                                # Get CIR between this pair
+                                a, _ = paths.cir(tx=f'tx-{veh_arr[j]["vehId"]}', 
+                                                rx=f'rx-{veh_arr[i]["vehId"]}',
+                                                normalize_delays=False, 
+                                                out_type='numpy')
+                                path_powers = np.abs(a)**2
+                                total_power = np.sum(path_powers) 
+                                total_power_log = 10*np.log10(total_power) if total_power > 0 else -100
+                                frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = total_power_log
+                            else:
+                                frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = -100  # Out of range
+                        else:
+                            frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0  # Same vehicle
+
+            # Store RSSI data for this frame
+            frames.append(frame_time)
+            for veh_id in frame_rssi:
+                if veh_id not in all_rssi_data:
+                    all_rssi_data[veh_id] = []
+                all_rssi_data[veh_id].append(frame_rssi[veh_id])
+
+            # Set up camera view (default overview or custom)
+            if camera_default:
+                # Default camera shows the entire scene
+                avg_x = sum(v['x_coor'] for v in veh_arr) / len(veh_arr)
+                avg_y = sum(v['y_coor'] for v in veh_arr) / len(veh_arr)
+                avg_z = sum(v['z_coor'] for v in veh_arr) / len(veh_arr)
+                
+                cam = Camera(
+                    position=[avg_x, avg_y - 200, avg_z + 200],
+                    look_at=[avg_x, avg_y, avg_z]
+                )
             else:
-                rssi.append(0)  # No other vehicles in range
+                # Custom camera position and orientation
+                cam = Camera(
+                    position=[-69.6934, 434.79, 594.99], 
+                    look_at=[579.051, -196.43, 29.058]
+                )
 
             # Render the scene
             try:
                 scene.render_to_file(
                     camera=cam,
-                    filename=f'scenarios/{scenario}/render_frames/{int(float(stamp.attrib.get('time')))}.png',
+                    filename=f'scenarios/{scenario}/render_frames/{int(frame_time)}.png',
                     resolution=resolution,
-                    paths=paths
+                    paths=paths if len(veh_arr) > 1 else None
                 )
             except Exception as e:
                 print(f"Rendering error: {e}")
                 scene.render_to_file(
                     camera=cam,
-                    filename=f'scenarios/{scenario}/render_frames/{int(float(stamp.attrib.get('time')))}.png',
+                    filename=f'scenarios/{scenario}/render_frames/{int(frame_time)}.png',
                     resolution=resolution
                 )
 
             # Clean up for next frame
             for i in range(len(veh_arr)):
-                scene.remove(f'tx-{i}')
-                if i == main_car_id:
-                    scene.remove(f'rx-{i}')
+                scene.remove(f'tx-{veh_arr[i]["vehId"]}')
+                scene.remove(f'rx-{veh_arr[i]["vehId"]}')
             scene.edit(remove=cars) 
 
-    # Save RSSI data to CSV
-    df = pd.DataFrame(data={
-        'Frame': frames,
-        'RSSI': rssi
-    })
-    df.to_csv(f'scenarios/{scenario}/rssi_data.csv', sep=' ', index=False)
-    print('Simulation Finished') 
+    # Save RSSI data to CSV files (one per vehicle)
+    for veh_id in all_rssi_data:
+        # Create a DataFrame for this vehicle
+        df_data = []
+        for i, frame in enumerate(frames):
+            row = {'Frame': frame}
+            for other_id in all_rssi_data[veh_id][i]:
+                row[f'RSSI_to_{other_id}'] = all_rssi_data[veh_id][i][other_id]
+            df_data.append(row)
+        
+        df = pd.DataFrame(df_data)
+        os.makedirs(f'scenarios/{scenario}/rssi_data', exist_ok=True)
+        df.to_csv(f'scenarios/{scenario}/rssi_data/rssi_vehicle_{veh_id}.csv', sep=' ', index=False)
+    
+    print('Simulation Finished for all vehicles') 
 
 if __name__ == '__main__':
     # Example usage with custom parameters
-    signal_propogation(
+    signal_propagation_all_vehicles(
         scenario='test_scenario',
         resolution=[1920, 1080],
         output_video_name='output', 
-        main_car_id='6', 
         distance=100,
         camera_default=True
     )
