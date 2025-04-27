@@ -4,4 +4,5 @@ results
 sionna-venv
 scenarios_private
 *.png
+logs/*.log
 

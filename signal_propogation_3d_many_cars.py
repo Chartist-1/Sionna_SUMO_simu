@@ -33,7 +33,7 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
     - camera_default (bool): Whether to use default camera view or custom
     """
     
-    # Load vehicle trajectory data from XML
+    # Load XML
     filename = f'scenarios/{scenario}/data_cars.xml'
     tree = ET.parse(filename)
     root = tree.getroot()
@@ -70,10 +70,10 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
                                   color=(0.8, 0.1, 0.1))
 
     # Initialize data storage for all vehicles
-    all_rssi_data = {}  # Dictionary to store RSSI data for each vehicle
+    all_rssi_data = {}  # Dictionary to store RSSI data
     frames = []  # To store frame timestamps
 
-    # Create directory for render frames if it doesn't exist
+    # Create directory for render frames 
     os.makedirs(f'scenarios/{scenario}/render_frames', exist_ok=True)
 
     # Process each frame in the simulation
