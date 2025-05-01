@@ -17,6 +17,10 @@ except ImportError as e:
 
 from sionna.rt import load_scene, PlanarArray, Transmitter, Receiver, Camera, PathSolver, ITURadioMaterial, SceneObject
 
+
+
+
+
 def signal_propagation_all_vehicles(scenario: str = 'scenario', 
                                   resolution: list = [650, 500], 
                                   output_video_name: str = 'render',
@@ -33,6 +37,8 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
     - camera_default (bool): Whether to use default camera view or custom
     """
     
+    
+
     # Load XML
     filename = f'scenarios/{scenario}/data_cars.xml'
     tree = ET.parse(filename)
@@ -75,6 +81,9 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
 
     # Create directory for render frames 
     os.makedirs(f'scenarios/{scenario}/render_frames', exist_ok=True)
+
+    tx_power = 20.0 #Power of transmitter signal on base distanse (200-500m), will be used for measuring loss
+    attenuation_dict = {}
 
     # Process each frame in the simulation
     for stamp in root:
@@ -147,6 +156,7 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
                 
                 # Extract channel impulse response and calculate power for each pair
                 for i in range(len(veh_arr)):
+                    signal_loss = 0
                     for j in range(len(veh_arr)):
                         if i != j:
                             # Calculate distance between vehicles
@@ -156,20 +166,28 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
                                 (veh_arr[i]['z_coor'] - veh_arr[j]['z_coor'])**2
                             )
                             
+
                             if dist < distance:
                                 # Get CIR between this pair
-                                a, _ = paths.cir(tx=f'tx-{veh_arr[j]["vehId"]}', 
-                                                rx=f'rx-{veh_arr[i]["vehId"]}',
-                                                normalize_delays=False, 
-                                                out_type='numpy')
+                                a, _ = paths.cir(normalize_delays=False, out_type='numpy')
                                 path_powers = np.abs(a)**2
                                 total_power = np.sum(path_powers) 
                                 total_power_log = 10*np.log10(total_power) if total_power > 0 else -100
                                 frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = total_power_log
+
+                                signal_loss += (total_power_log - tx_power)
                             else:
                                 frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = -100  # Out of range
                         else:
                             frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0  # Same vehicle
+                    
+                    if i not in attenuation_dict:
+                        attenuation_dict[i] = []
+
+                    attenuation_dict[i].append({
+                        'frame': frame_time,
+                        'signal_loss': signal_loss
+                    })
 
             # Store RSSI data for this frame
             frames.append(frame_time)
@@ -231,6 +249,22 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
         df = pd.DataFrame(df_data)
         os.makedirs(f'scenarios/{scenario}/rssi_data', exist_ok=True)
         df.to_csv(f'scenarios/{scenario}/rssi_data/rssi_vehicle_{veh_id}.csv', sep=' ', index=False)
+
+    rows = []
+    for veh_id, measurements in attenuation_dict.items():
+        for measurement in measurements:
+            rows.append({
+                'vehicle_id': veh_id,
+                'frame': measurement['frame'],
+                'signal_loss': measurement['signal_loss']
+            })
+
+    df = pd.DataFrame(rows)
+
+    # Сохранение в CSV
+    csv_path = f'scenarios/{scenario}/rssi_data/signal_attenuation_results.csv'
+    df.to_csv(csv_path, index=False)
+    print(f"Signal Loss Data has been written in: {csv_path}")
     
     print('Simulation Finished for all vehicles') 
 
