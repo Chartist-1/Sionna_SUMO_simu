@@ -219,7 +219,7 @@ def signal_propogation(scenario: str = 'scenario',
                 path_powers = np.abs(a)**2
                 total_power = np.sum(path_powers) 
                 total_power_log  = 10*np.log10(total_power)
-                rssi.append(total_power)
+                rssi.append(total_power_log)
             else:
                 rssi.append(0)  # No other vehicles in range
 

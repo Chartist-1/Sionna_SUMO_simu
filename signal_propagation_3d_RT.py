@@ -1,0 +1,351 @@
+import pandas as pd
+import drjit as dr
+import mitsuba as mi
+import numpy as np
+import xml.etree.ElementTree as ET
+import subprocess
+import math
+import traci
+import time
+import webbrowser
+import os
+import sionna.rt
+
+
+from sionna.rt import load_scene, PlanarArray, Transmitter, Receiver, Camera, PathSolver, ITURadioMaterial, SceneObject
+
+def timer(func):
+    def wrapper(*args, **kwargs):
+        start = time.perf_counter()           
+        result = func(*args, **kwargs)        
+        end = time.perf_counter()             
+        print(f"[TIMER] {func.__name__} выполнена за {end - start:.6f} сек")
+        return result
+    return wrapper
+
+
+def projection(scene, veh_arr):
+    new_veh_arr =[]
+    for i in range (len(veh_arr)):
+        x = veh_arr[i].get('x_coor')
+        y = veh_arr[i].get('y_coor')
+        ray = mi.Ray3f(
+            o=mi.Point3f([x, y, 1000]),  
+            d=mi.Vector3f([0, 0, -1])  
+        )
+        z = scene.ray_intersect(ray).p[2]
+        if z!= 0 :
+            new_veh_arr.append({'vehId':veh_arr[i].get('vehId'),
+                            'x_coor':veh_arr[i].get('x_coor'),
+                            'y_coor':veh_arr[i].get('y_coor'),
+                            'z_coor':z[0],
+                            'angle':veh_arr[i].get('angle'),
+                            'velocity': veh_arr[i].get('velocity')
+                            })
+    return new_veh_arr
+
+def get_config_coordinates ():
+    url = 'https://prochitecture.com/blender-osm/extent/?blender_version=4.2&addon=blosm&addon_version=2.7.14'
+    webbrowser.open(url=url)
+    with open('config.txt', 'w') as f:
+        coords = input("Enter coordinates: ")
+        f.write(coords)
+
+
+
+def import_scenario():
+    subprocess.run('blender --background --python blender_auto.py'.split(' '))
+    print('Scenario installed and Ready to use')
+
+
+@timer
+def frame_handler(scene, 
+                veh_arr,
+                car_material,
+                distance = 100,
+                render: bool = False,
+                scenario:str = 'scenario',
+                camera_default:bool = True,
+                resolution = [650,500],
+                step:int = 0):
+
+    # Only process frames that contain vehicles
+    if len(veh_arr)!=0:
+        frame_rssi = {v['vehId']: {} for v in veh_arr}
+        
+        # Create 3D car models for visualization
+        cars = [SceneObject(
+            fname= sionna.rt.scene.low_poly_car,
+            name=f'{veh_arr[i]["vehId"]}',
+            radio_material=car_material
+        ) for i in range(len(veh_arr))]
+        
+        scene.edit(add=cars)
+
+        
+        for i in range(len(veh_arr)):
+            cars[i].position = mi.Point3f(
+                veh_arr[i]['x_coor'], 
+                veh_arr[i]['y_coor'], 
+                veh_arr[i]['z_coor']+1
+            )
+            cars[i].orientation = mi.Point3f(float(veh_arr[i]['angle']), 0, 0)
+            cars[i].scaling = mi.Float(1.5)
+            
+            # Add all vehicles as both transmitters and receivers
+            scene.add(Transmitter(
+                f'tx-{veh_arr[i]["vehId"]}',
+                position=[veh_arr[i]['x_coor'], veh_arr[i]['y_coor'], veh_arr[i]['z_coor']+3],
+                display_radius=2
+            ))
+            scene.add(Receiver(
+                f'rx-{veh_arr[i]["vehId"]}',
+                position=[veh_arr[i]['x_coor'], veh_arr[i]['y_coor'], veh_arr[i]['z_coor']+3],
+                display_radius=2
+            ))
+
+        # Calculate signal paths between all pairs of vehicles
+        if len(veh_arr) > 1:
+            print('Calculating signal paths between all vehicles...')
+            p_solver = PathSolver()
+            paths = p_solver(
+                scene=scene,
+                max_depth=4,
+                los=True,
+                specular_reflection=True,
+                diffuse_reflection=True,
+                refraction=True,
+                synthetic_array=False,
+                seed=42
+            )
+            
+            # Extract channel impulse response and calculate power for each pair
+            for i in range(len(veh_arr)):
+                for j in range(len(veh_arr)):
+                    if i != j:
+                        # Calculate distance between vehicles
+                        dist = math.sqrt(
+                            (veh_arr[i]['x_coor'] - veh_arr[j]['x_coor'])**2 +
+                            (veh_arr[i]['y_coor'] - veh_arr[j]['y_coor'])**2 +
+                            (veh_arr[i]['z_coor'] - veh_arr[j]['z_coor'])**2
+                        )
+                        
+                        if dist < distance:
+                            # Get CIR between this pair
+
+                            a, _ = paths.cir(normalize_delays=False, 
+                                            out_type='numpy')
+                            path_powers = np.abs(a[i][0][j][0])**2
+                            total_power = np.sum(path_powers) 
+                            total_power_log = 10*np.log10(total_power) if total_power > 0 else -200
+                            frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = total_power_log
+                        else:
+                            frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = -200  # Out of range
+                    else:
+                        frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0  # Same vehicle
+        
+
+        if render:
+            if camera_default:
+                avg_x = sum(v['x_coor'] for v in veh_arr) / len(veh_arr)
+                avg_y = sum(v['y_coor'] for v in veh_arr) / len(veh_arr)
+                avg_z = sum(v['z_coor'] for v in veh_arr) / len(veh_arr)
+
+                cam = Camera(
+                    position=[avg_x, avg_y - 200, avg_z + 200],
+                    look_at=[avg_x, avg_y, avg_z]
+                )
+            else:
+
+                cam = Camera(
+                    position=[0, 0, 2000], 
+                    look_at=[0, 0, 0]
+                )
+            try:
+                scene.render_to_file(
+                    camera=cam,
+                    filename=f'scenarios/{scenario}/render_frames/{int(step)}.png',
+                    resolution=resolution,
+                    paths=paths if len(veh_arr) > 1 else None
+                )
+            except Exception as e:
+                print(f"Rendering error: {e}")
+                scene.render_to_file(
+                    camera=cam,
+                    filename=f'scenarios/{scenario}/render_frames/{int(step)}.png',
+                    resolution=resolution
+                )
+
+
+        for i in range(len(veh_arr)):
+            scene.remove(f'tx-{veh_arr[i]["vehId"]}')
+            scene.remove(f'rx-{veh_arr[i]["vehId"]}')
+        scene.edit(remove=cars) 
+        
+        print('heeloo')
+        return frame_rssi
+    
+
+
+
+def signal_propogation(scenario: str = 'scenario', 
+                      distance: int = 500,
+                      render:bool =False,
+                      camera_default: bool = True,
+                      resolution: list = [650, 500], 
+                      output_video_name: str = 'render', 
+                      port:int = 8813):
+
+
+    
+    flag = input('Continue simulation y/n: ')
+    if flag == 'n':
+        return
+
+    # Load the scene and configure antenna arrays
+    scene = load_scene(f'scenarios/{scenario}/scenario.xml')
+    
+    # Configure transmitter array properties
+    scene.tx_array = PlanarArray(num_rows=1,
+                               num_cols=1,
+                               vertical_spacing=0.5,
+                               horizontal_spacing=0.5,
+                               pattern="iso",
+                               polarization="V")
+
+    # Configure receiver array properties
+    scene.rx_array = PlanarArray(num_rows=1,
+                               num_cols=1,
+                               vertical_spacing=0.5,
+                               horizontal_spacing=0.5,
+                               pattern="iso",
+                               polarization="cross")
+
+    # Create radio material for vehicles
+    car_material = ITURadioMaterial("car-material",
+                                  "metal",
+                                  thickness=0.01,
+                                  color=(0.8, 0.1, 0.1))
+
+
+   
+
+    os.makedirs(f'scenarios/{scenario}/render_frames', exist_ok=True)
+
+
+    try:
+        # Connect to the SUMO server
+        traci.init(port)
+        print(f"Connected to SUMO server on port {port}")
+
+        step = 0
+        
+    
+        
+        
+        x_max =float(traci.simulation.getNetBoundary()[1][0])
+        y_max =float(traci.simulation.getNetBoundary()[1][1])
+
+
+        all_rssi_data = {}  # Dictionary to store RSSI data
+        frames = []  # To store frame timestamps
+
+        terrain = mi.load_file('scenarios/test_scenario/terrain.xml')
+        while step < 1000:  # Run for 1000 simulation steps
+            traci.simulationStep()  # Advance the simulation by one step
+            print(step)
+            # Example: Get all vehicle IDs
+            vehicle_ids = traci.vehicle.getIDList()
+            veh_arr = []
+            for vehID in vehicle_ids:
+                veh_arr.append({'vehId':vehID,
+                                'x_coor':float(traci.vehicle.getPosition(vehID=vehID)[0]-x_max/2),
+                                'y_coor':float(traci.vehicle.getPosition(vehID=vehID)[1]-y_max/2),
+                                'angle':-np.radians(float(traci.vehicle.getAngle(vehID=vehID) + 90)),
+                                'velocity':float(traci.vehicle.getSpeed(vehID=vehID))})
+            veh_arr = projection(terrain,veh_arr=veh_arr)
+            print(veh_arr)
+            result = frame_handler(scene=scene,
+                                   veh_arr=veh_arr,
+                                   car_material=car_material,
+                                   distance=distance,
+                                   render=render,
+                                   scenario=scenario,
+                                   camera_default=camera_default,
+                                   resolution=resolution,
+                                   step=step
+                                   )
+            print(result)
+
+            frames.append(step)
+            if result:
+                for veh_id in result:
+                    if veh_id not in all_rssi_data:
+                        all_rssi_data[veh_id] = []
+                    all_rssi_data[veh_id].append(result[veh_id])
+
+            
+
+            print('\n ###################### \n')
+
+            
+            step += 1
+            if step >10 :
+                break
+        print(all_rssi_data)
+        print('Saving data')
+        for veh_id in all_rssi_data:
+            # Create a DataFrame for this vehicle
+            df_data = []
+            for i, frame in enumerate(frames):
+                row = {'Frame': frame}
+                for other_id in all_rssi_data[veh_id][i]:
+                    row[f'RSSI_to_{other_id}'] = all_rssi_data[veh_id][i][other_id]
+                df_data.append(row)
+            
+            df = pd.DataFrame(df_data)
+            os.makedirs(f'scenarios/{scenario}/rssi_data', exist_ok=True)
+            df.to_csv(f'scenarios/{scenario}/rssi_data/rssi_vehicle_{veh_id}.csv', sep=' ', index=False)
+    
+            
+        print('Simulation Finished for all vehicles') 
+
+    
+    except KeyboardInterrupt:
+        print('Interrrupted')
+        print('Saving data')
+        for veh_id in all_rssi_data:
+            # Create a DataFrame for this vehicle
+            df_data = []
+            for i, frame in enumerate(frames):
+                row = {'Frame': frame}
+                for other_id in all_rssi_data[veh_id][i]:
+                    row[f'RSSI_to_{other_id}'] = all_rssi_data[veh_id][i][other_id]
+                df_data.append(row)
+            
+            df = pd.DataFrame(df_data)
+            os.makedirs(f'scenarios/{scenario}/rssi_data', exist_ok=True)
+            df.to_csv(f'scenarios/{scenario}/rssi_data/rssi_vehicle_{veh_id}.csv', sep=' ', index=False)
+    
+   
+    finally:
+        # Close the connection to SUMO
+        traci.close()
+        print("Disconnected from SUMO server.")
+    
+    return
+
+    
+
+if __name__ == '__main__':
+    # Example usage with custom parameters
+    signal_propogation(
+        scenario='test_scenario',
+        distance=500,
+        render=False,
+        camera_default=False,
+        resolution=[650,500]
+    )
+    # get_config_coordinates()
+
+    #sumo -c scenarios/test_scenario/2025-04-21-16-39-58/osm.sumocfg --remote-port 8813
