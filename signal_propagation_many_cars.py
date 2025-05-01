@@ -17,6 +17,10 @@ except ImportError as e:
 
 from sionna.rt import load_scene, PlanarArray, Transmitter, Receiver, Camera, PathSolver, ITURadioMaterial, SceneObject
 
+
+
+
+
 def signal_propagation_all_vehicles(scenario: str = 'scenario', 
                                   resolution: list = [650, 500], 
                                   output_video_name: str = 'render',
@@ -33,6 +37,8 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
     - camera_default (bool): Whether to use default camera view or custom
     """
     
+    
+
     # Load XML
     filename = f'scenarios/{scenario}/data_cars.xml'
     tree = ET.parse(filename)
@@ -40,7 +46,8 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
 
     # Determine frame range for simulation
     start_frame = float(root[0].attrib.get('time'))
-    stop_frame = float(root[-1].attrib.get('time'))
+    # stop_frame = float(root[-1].attrib.get('time'))
+    stop_frame = float(10)
 
     print(f'Processing all vehicles in frames: {start_frame} to {stop_frame}')
 
@@ -75,6 +82,9 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
 
     # Create directory for render frames 
     os.makedirs(f'scenarios/{scenario}/render_frames', exist_ok=True)
+
+    tx_power = 20.0 #Power of transmitter signal on base distanse (200-500m), will be used for measuring loss
+    attenuation_dict = {}
 
     # Process each frame in the simulation
     for stamp in root:
@@ -119,7 +129,6 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
                 cars[i].scaling = mi.Float(1.5)
                 
                 # Add all vehicles as both transmitters and receivers
-                print(f'tx-{veh_arr[i]["vehId"]}')
                 scene.add(Transmitter(
                     f'tx-{veh_arr[i]["vehId"]}',
                     position=[veh_arr[i]['x_coor'], veh_arr[i]['y_coor'], veh_arr[i]['z_coor']+3],
@@ -135,7 +144,6 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
             if len(veh_arr) > 1:
                 print('Calculating signal paths between all vehicles...')
                 p_solver = PathSolver()
-                paths = 0
                 paths = p_solver(
                     scene=scene,
                     max_depth=4,
@@ -149,6 +157,7 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
                 
                 # Extract channel impulse response and calculate power for each pair
                 for i in range(len(veh_arr)):
+                    signal_loss = 0
                     for j in range(len(veh_arr)):
                         if i != j:
                             # Calculate distance between vehicles
@@ -158,20 +167,28 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
                                 (veh_arr[i]['z_coor'] - veh_arr[j]['z_coor'])**2
                             )
                             
+
                             if dist < distance:
                                 # Get CIR between this pair
-                                a, _ = paths.cir(normalize_delays=False, 
-                                                out_type='numpy')
-
-                                path_powers = np.abs(a[i][0][j][0])**2
+                                a, _ = paths.cir(normalize_delays=False, out_type='numpy')
+                                path_powers = np.abs(a)**2
                                 total_power = np.sum(path_powers) 
                                 total_power_log = 10*np.log10(total_power) if total_power > 0 else -100
-                                print(total_power_log)
                                 frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = total_power_log
+
+                                signal_loss += (total_power_log - tx_power)
                             else:
                                 frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = -100  # Out of range
                         else:
                             frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0  # Same vehicle
+                    
+                    if i not in attenuation_dict:
+                        attenuation_dict[i] = []
+
+                    attenuation_dict[i].append({
+                        'frame': frame_time,
+                        'signal_loss': signal_loss
+                    })
 
             # Store RSSI data for this frame
             frames.append(frame_time)
@@ -194,8 +211,8 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
             else:
                 # Custom camera position and orientation
                 cam = Camera(
-                    position=[0, 0, 2000], 
-                    look_at=[0, 0, 0]
+                    position=[-11.7, -855, 477], 
+                    look_at=[-392, -190.43, 90]
                 )
 
             # Render the scene
@@ -214,6 +231,8 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
                     resolution=resolution
                 )
 
+            if stop_frame <frame_time:
+                break
             # Clean up for next frame
             for i in range(len(veh_arr)):
                 scene.remove(f'tx-{veh_arr[i]["vehId"]}')
@@ -233,13 +252,29 @@ def signal_propagation_all_vehicles(scenario: str = 'scenario',
         df = pd.DataFrame(df_data)
         os.makedirs(f'scenarios/{scenario}/rssi_data', exist_ok=True)
         df.to_csv(f'scenarios/{scenario}/rssi_data/rssi_vehicle_{veh_id}.csv', sep=' ', index=False)
+
+    rows = []
+    for veh_id, measurements in attenuation_dict.items():
+        for measurement in measurements:
+            rows.append({
+                'vehicle_id': veh_id,
+                'frame': measurement['frame'],
+                'signal_loss': measurement['signal_loss']
+            })
+
+    df = pd.DataFrame(rows)
+
+    # Сохранение в CSV
+    csv_path = f'scenarios/{scenario}/rssi_data/signal_attenuation_results.csv'
+    df.to_csv(csv_path, index=False)
+    print(f"Signal Loss Data has been written in: {csv_path}")
     
     print('Simulation Finished for all vehicles') 
 
 if __name__ == '__main__':
     # Example usage with custom parameters
     signal_propagation_all_vehicles(
-        scenario='test_scenario',
+        scenario='scenario_strogino',
         resolution=[650, 500],
         output_video_name='output', 
         distance=100,
