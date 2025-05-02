@@ -3,6 +3,9 @@ results
 sionna-venv
 scenarios_private
 *.png
+*.mp4
 test.py
 archive
 *.blend
+*.blend1
+.ipynb_checkpoints

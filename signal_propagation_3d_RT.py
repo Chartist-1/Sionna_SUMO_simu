@@ -168,8 +168,8 @@ def frame_handler(scene,
             else:
 
                 cam = Camera(
-                    position=[0, 0, 2000], 
-                    look_at=[0, 0, 0]
+                    position=[-11.7, -855, 477], 
+                    look_at=[-392, -190.43, 90]
                 )
             try:
                 scene.render_to_file(
@@ -242,6 +242,7 @@ def signal_propogation(scenario: str = 'scenario',
    
 
     os.makedirs(f'scenarios/{scenario}/render_frames', exist_ok=True)
+    os.makedirs(f'scenarios/{scenario}/output_data', exist_ok=True)
 
 
     try:
@@ -294,7 +295,7 @@ def signal_propogation(scenario: str = 'scenario',
                 'RSSI' : result
             }])
             all_rssi_df = pd.concat([all_rssi_df,new_row],ignore_index=True)
-            all_rssi_df.to_csv(f'scearios/{scenario}/output.csv',sep = ' ', index = False)
+            all_rssi_df.to_csv(f'scenarios/{scenario}/output_data/output.csv',sep = ' ', index = False)
 
             
 
@@ -317,13 +318,14 @@ def signal_propogation(scenario: str = 'scenario',
 
 if __name__ == '__main__':
     # Example usage with custom parameters
-    run_sumo_server(scenario='test_scenario')
+    scenario = 'scenario_strogino'
+    run_sumo_server(scenario=scenario)
     signal_propogation(
-        scenario='test_scenario',
-        begin_frame = 1000,
-        stop_frame = 1020,
+        scenario=scenario,
+        begin_frame = 120,
+        stop_frame = 196,
         distance=500,
-        render=True,
+        render=False,
         camera_default=False,
         resolution=[650,500]
     )

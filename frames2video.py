@@ -20,4 +20,4 @@ def create_video_from_frames(frames_dir, output_path="simulation.mp4", base_fps=
     writer.release()
 
 if __name__ =='__main__':
-    create_video_from_frames("scenarios/test_scenario/render_frames", "scenarios/test_scenario/output.mp4", base_fps=30, speed=0.2)
+    create_video_from_frames("scenarios/scenario_strogino/render_frames", "scenarios/scenario_strogino/output.mp4", base_fps=30, speed=0.2)
