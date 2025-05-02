@@ -5,3 +5,4 @@ scenarios_private
 *.png
 test.py
 archive
+*.blend
