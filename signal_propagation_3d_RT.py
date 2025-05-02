@@ -44,6 +44,17 @@ def projection(scene, veh_arr):
                             })
     return new_veh_arr
 
+def run_sumo_server(scenario:str = 'test_scenario',
+                    port:int = 8813):
+    process = subprocess.Popen(
+    f'sumo -c scenarios/{scenario}/sumo_dir/osm.sumocfg --remote-port {port}'.split(' '),
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True
+    )
+    print (f'***Starting SUMO server on port {port} ***', process.pid)
+
+
 def get_config_coordinates ():
     url = 'https://prochitecture.com/blender-osm/extent/?blender_version=4.2&addon=blosm&addon_version=2.7.14'
     webbrowser.open(url=url)
@@ -55,7 +66,7 @@ def get_config_coordinates ():
 
 def import_scenario():
     subprocess.run('blender --background --python blender_auto.py'.split(' '))
-    print('Scenario installed and Ready to use')
+    print('Scenario installed')
 
 
 @timer
@@ -106,7 +117,6 @@ def frame_handler(scene,
 
         # Calculate signal paths between all pairs of vehicles
         if len(veh_arr) > 1:
-            print('Calculating signal paths between all vehicles...')
             p_solver = PathSolver()
             paths = p_solver(
                 scene=scene,
@@ -182,13 +192,14 @@ def frame_handler(scene,
             scene.remove(f'rx-{veh_arr[i]["vehId"]}')
         scene.edit(remove=cars) 
         
-        print('heeloo')
         return frame_rssi
     
 
 
 
 def signal_propogation(scenario: str = 'scenario', 
+                      begin_frame:int = 0,
+                      stop_frame:int =100,
                       distance: int = 500,
                       render:bool =False,
                       camera_default: bool = True,
@@ -237,25 +248,25 @@ def signal_propogation(scenario: str = 'scenario',
         # Connect to the SUMO server
         traci.init(port)
         print(f"Connected to SUMO server on port {port}")
-
         step = 0
-        
-    
-        
-        
+
         x_max =float(traci.simulation.getNetBoundary()[1][0])
         y_max =float(traci.simulation.getNetBoundary()[1][1])
 
+        columns = ['Frame','Cars_Data', 'RSSI']
+        all_rssi_df = pd.DataFrame(columns=columns)
 
-        all_rssi_data = {}  # Dictionary to store RSSI data
-        frames = []  # To store frame timestamps
 
-        terrain = mi.load_file('scenarios/test_scenario/terrain.xml')
-        while step < 1000:  # Run for 1000 simulation steps
+        terrain = mi.load_file(f'scenarios/{scenario}/terrain.xml')
+        while step < stop_frame:  # Run for 1000 simulation steps
             traci.simulationStep()  # Advance the simulation by one step
-            print(step)
-            # Example: Get all vehicle IDs
+            step += 1
+            if step<begin_frame:
+                continue
+
             vehicle_ids = traci.vehicle.getIDList()
+
+
             veh_arr = []
             for vehID in vehicle_ids:
                 veh_arr.append({'vehId':vehID,
@@ -264,7 +275,7 @@ def signal_propogation(scenario: str = 'scenario',
                                 'angle':-np.radians(float(traci.vehicle.getAngle(vehID=vehID) + 90)),
                                 'velocity':float(traci.vehicle.getSpeed(vehID=vehID))})
             veh_arr = projection(terrain,veh_arr=veh_arr)
-            print(veh_arr)
+            print(f'Frame: {step}, Number of vehicles: {len(veh_arr)}')
             result = frame_handler(scene=scene,
                                    veh_arr=veh_arr,
                                    car_material=car_material,
@@ -275,58 +286,25 @@ def signal_propogation(scenario: str = 'scenario',
                                    resolution=resolution,
                                    step=step
                                    )
-            print(result)
-
-            frames.append(step)
-            if result:
-                for veh_id in result:
-                    if veh_id not in all_rssi_data:
-                        all_rssi_data[veh_id] = []
-                    all_rssi_data[veh_id].append(result[veh_id])
-
             
-
-            print('\n ###################### \n')
+            
+            new_row = pd.DataFrame([{
+                'Frame':step,
+                'Cars_Data':veh_arr,
+                'RSSI' : result
+            }])
+            all_rssi_df = pd.concat([all_rssi_df,new_row],ignore_index=True)
+            all_rssi_df.to_csv(f'scearios/{scenario}/output.csv',sep = ' ', index = False)
 
             
-            step += 1
-            if step >10 :
-                break
-        print(all_rssi_data)
-        print('Saving data')
-        for veh_id in all_rssi_data:
-            # Create a DataFrame for this vehicle
-            df_data = []
-            for i, frame in enumerate(frames):
-                row = {'Frame': frame}
-                for other_id in all_rssi_data[veh_id][i]:
-                    row[f'RSSI_to_{other_id}'] = all_rssi_data[veh_id][i][other_id]
-                df_data.append(row)
-            
-            df = pd.DataFrame(df_data)
-            os.makedirs(f'scenarios/{scenario}/rssi_data', exist_ok=True)
-            df.to_csv(f'scenarios/{scenario}/rssi_data/rssi_vehicle_{veh_id}.csv', sep=' ', index=False)
-    
-            
+
+ 
         print('Simulation Finished for all vehicles') 
 
     
     except KeyboardInterrupt:
         print('Interrrupted')
-        print('Saving data')
-        for veh_id in all_rssi_data:
-            # Create a DataFrame for this vehicle
-            df_data = []
-            for i, frame in enumerate(frames):
-                row = {'Frame': frame}
-                for other_id in all_rssi_data[veh_id][i]:
-                    row[f'RSSI_to_{other_id}'] = all_rssi_data[veh_id][i][other_id]
-                df_data.append(row)
-            
-            df = pd.DataFrame(df_data)
-            os.makedirs(f'scenarios/{scenario}/rssi_data', exist_ok=True)
-            df.to_csv(f'scenarios/{scenario}/rssi_data/rssi_vehicle_{veh_id}.csv', sep=' ', index=False)
-    
+
    
     finally:
         # Close the connection to SUMO
@@ -339,10 +317,13 @@ def signal_propogation(scenario: str = 'scenario',
 
 if __name__ == '__main__':
     # Example usage with custom parameters
+    run_sumo_server(scenario='test_scenario')
     signal_propogation(
         scenario='test_scenario',
+        begin_frame = 1000,
+        stop_frame = 1020,
         distance=500,
-        render=False,
+        render=True,
         camera_default=False,
         resolution=[650,500]
     )

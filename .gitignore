@@ -3,4 +3,5 @@ results
 sionna-venv
 scenarios_private
 *.png
-
+test.py
+archive
