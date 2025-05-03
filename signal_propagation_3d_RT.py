@@ -24,20 +24,31 @@ def timer(func):
     return wrapper
 
 
-def projection(scene, veh_arr):
+def projection(scene, veh_arr, veh_arr_pred):
+
     new_veh_arr =[]
     for i in range (len(veh_arr)):
         x = veh_arr[i].get('x_coor')
         y = veh_arr[i].get('y_coor')
+            
         ray = mi.Ray3f(
             o=mi.Point3f([x, y, 1000]),  
             d=mi.Vector3f([0, 0, -1])  
         )
         z = scene.ray_intersect(ray).p[2]
+        pred_veh = next((veh for veh in veh_arr_pred if veh.get('vehId')==veh_arr[i].get('vehId')),None)
+        if pred_veh:
+            z_pred = pred_veh['z_coor']   
+            if abs(z_pred - z) >5:
+                ray = mi.Ray3f(
+                    o=mi.Point3f([x, y, -1000]),  
+                    d=mi.Vector3f([0, 0, 1])  
+                )
+                z = scene.ray_intersect(ray).p[2]
         if z!= 0 :
             new_veh_arr.append({'vehId':veh_arr[i].get('vehId'),
                             'x_coor':veh_arr[i].get('x_coor'),
-                            'y_coor':veh_arr[i].get('y_coor'),
+                            'y_coor':veh_arr[i].get('y_coor') ,
                             'z_coor':z[0],
                             'angle':veh_arr[i].get('angle'),
                             'velocity': veh_arr[i].get('velocity')
@@ -168,8 +179,10 @@ def frame_handler(scene,
             else:
 
                 cam = Camera(
-                    position=[-11.7, -855, 477], 
-                    look_at=[-392, -190.43, 90]
+                    # position=[0,0, 1000], 
+                    # look_at=[0,0,0]
+                    position=[365.2,369.65, 293.3], 
+                    look_at=[0,0,0]
                 )
             try:
                 scene.render_to_file(
@@ -257,7 +270,7 @@ def signal_propogation(scenario: str = 'scenario',
         columns = ['Frame','Cars_Data', 'RSSI']
         all_rssi_df = pd.DataFrame(columns=columns)
 
-
+        veh_arr_pred =[]
         terrain = mi.load_file(f'scenarios/{scenario}/terrain.xml')
         while step < stop_frame:  # Run for 1000 simulation steps
             traci.simulationStep()  # Advance the simulation by one step
@@ -267,15 +280,16 @@ def signal_propogation(scenario: str = 'scenario',
 
             vehicle_ids = traci.vehicle.getIDList()
 
-
+            offset = [5,0]
             veh_arr = []
             for vehID in vehicle_ids:
                 veh_arr.append({'vehId':vehID,
-                                'x_coor':float(traci.vehicle.getPosition(vehID=vehID)[0]-x_max/2),
-                                'y_coor':float(traci.vehicle.getPosition(vehID=vehID)[1]-y_max/2),
+                                'x_coor':float(traci.vehicle.getPosition(vehID=vehID)[0]-x_max/2) + offset[0],
+                                'y_coor':float(traci.vehicle.getPosition(vehID=vehID)[1]-y_max/2) + offset[1],
                                 'angle':-np.radians(float(traci.vehicle.getAngle(vehID=vehID) + 90)),
                                 'velocity':float(traci.vehicle.getSpeed(vehID=vehID))})
-            veh_arr = projection(terrain,veh_arr=veh_arr)
+            veh_arr = projection(terrain,veh_arr=veh_arr,veh_arr_pred=veh_arr_pred)
+            veh_arr_pred = veh_arr
             print(f'Frame: {step}, Number of vehicles: {len(veh_arr)}')
             result = frame_handler(scene=scene,
                                    veh_arr=veh_arr,
@@ -318,14 +332,14 @@ def signal_propogation(scenario: str = 'scenario',
 
 if __name__ == '__main__':
     # Example usage with custom parameters
-    scenario = 'scenario_strogino'
+    scenario = 'scenario_tunnel'
     run_sumo_server(scenario=scenario)
     signal_propogation(
         scenario=scenario,
-        begin_frame = 120,
-        stop_frame = 196,
+        begin_frame = 80,
+        stop_frame = 100,
         distance=500,
-        render=False,
+        render=True,
         camera_default=False,
         resolution=[650,500]
     )
