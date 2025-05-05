@@ -163,9 +163,9 @@ def frame_handler(scene,
                             frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = total_power_log
 
                             freq = scene.frequency
-                            fspl = 20 * np.log10(dist) + 20 * np.log10(freq) + 20 * np.log10(4 * np.pi / 3e8) # free-space path loss
+                            fspl = 20*np.log10(dist) + 20*np.log10(freq) + 20*np.log10(4 * np.pi / 3e8) # free-space path loss
                             tx_power = 20  # dBm, typical V2X transmission power
-                            path_loss = tx_power - total_power_log - fspl.item() #Power of Tx - free space loss - power of Rx
+                            path_loss = np.abs(tx_power - total_power_log - fspl.item()) #Power of Tx - free space loss - power of Rx
                             frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = path_loss
                         else:
                             frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = -200  # Out of range
@@ -348,7 +348,7 @@ if __name__ == '__main__':
     signal_propogation(
         scenario=scenario,
         begin_frame = 80,
-        stop_frame = 100,
+        stop_frame = 81,
         distance=500,
         render=True,
         camera_default=False,
