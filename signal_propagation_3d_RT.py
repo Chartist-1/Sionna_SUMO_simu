@@ -94,6 +94,7 @@ def frame_handler(scene,
     # Only process frames that contain vehicles
     if len(veh_arr)!=0:
         frame_rssi = {v['vehId']: {} for v in veh_arr}
+        frame_loss = {v['vehId']: {} for v in veh_arr}
         
         # Create 3D car models for visualization
         cars = [SceneObject(
@@ -153,17 +154,26 @@ def frame_handler(scene,
                         
                         if dist < distance:
                             # Get CIR between this pair
-
+                            
                             a, _ = paths.cir(normalize_delays=False, 
                                             out_type='numpy')
                             path_powers = np.abs(a[i][0][j][0])**2
                             total_power = np.sum(path_powers) 
                             total_power_log = 10*np.log10(total_power) if total_power > 0 else -200
                             frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = total_power_log
+
+                            freq = scene.frequency
+                            fspl = 20*np.log10(dist) + 20*np.log10(freq) + 20*np.log10(4 * np.pi / 3e8) # free-space path loss
+                            tx_power = 20  # dBm, typical V2X transmission power
+                            rssi = np.abs(tx_power - total_power_log - fspl.item()) #Power of Tx - free space loss - power of Rx
+                            frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = rssi
                         else:
                             frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = -200  # Out of range
+                            frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0
                     else:
                         frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0  # Same vehicle
+                        frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0
+
         
 
         if render:
@@ -205,7 +215,7 @@ def frame_handler(scene,
             scene.remove(f'rx-{veh_arr[i]["vehId"]}')
         scene.edit(remove=cars) 
         
-        return frame_rssi
+        return frame_rssi,frame_loss
     
 
 
@@ -291,7 +301,7 @@ def signal_propogation(scenario: str = 'scenario',
             veh_arr = projection(terrain,veh_arr=veh_arr,veh_arr_pred=veh_arr_pred)
             veh_arr_pred = veh_arr
             print(f'Frame: {step}, Number of vehicles: {len(veh_arr)}')
-            result = frame_handler(scene=scene,
+            result, loss = frame_handler(scene=scene,
                                    veh_arr=veh_arr,
                                    car_material=car_material,
                                    distance=distance,
@@ -304,12 +314,13 @@ def signal_propogation(scenario: str = 'scenario',
             
             
             new_row = pd.DataFrame([{
-                'Frame':step,
-                'Cars_Data':veh_arr,
-                'RSSI' : result
+                'Frame': step,
+                'Cars_Data': veh_arr,
+                'RSSI': loss,
+                'PathLoss': result
             }])
             all_rssi_df = pd.concat([all_rssi_df,new_row],ignore_index=True)
-            all_rssi_df.to_csv(f'scenarios/{scenario}/output_data/output.csv',sep = ' ', index = False)
+            all_rssi_df.to_csv(f'scenarios/{scenario}/output_data/output.csv',sep = ';', index = False)
 
             
 
