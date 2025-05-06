@@ -165,8 +165,8 @@ def frame_handler(scene,
                             freq = scene.frequency
                             fspl = 20*np.log10(dist) + 20*np.log10(freq) + 20*np.log10(4 * np.pi / 3e8) # free-space path loss
                             tx_power = 20  # dBm, typical V2X transmission power
-                            path_loss = np.abs(tx_power - total_power_log - fspl.item()) #Power of Tx - free space loss - power of Rx
-                            frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = path_loss
+                            rssi = np.abs(tx_power - total_power_log - fspl.item()) #Power of Tx - free space loss - power of Rx
+                            frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = rssi
                         else:
                             frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = -200  # Out of range
                             frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0
@@ -316,8 +316,8 @@ def signal_propogation(scenario: str = 'scenario',
             new_row = pd.DataFrame([{
                 'Frame': step,
                 'Cars_Data': veh_arr,
-                'RSSI': result,
-                'SignalLoss': loss
+                'RSSI': loss,
+                'PathLoss': result
             }])
             all_rssi_df = pd.concat([all_rssi_df,new_row],ignore_index=True)
             all_rssi_df.to_csv(f'scenarios/{scenario}/output_data/output.csv',sep = ';', index = False)
