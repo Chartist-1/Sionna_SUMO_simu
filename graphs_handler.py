@@ -4,8 +4,8 @@ import ast
 import matplotlib.pyplot as plt 
 matplotlib.use('Qt5Agg')
 
-data = pd.read_csv(f'scenarios/scenario_tunnel/output_data/output.csv', sep = ' ')
-car_id = 9
+data = pd.read_csv(f'scenarios/scenario_serpantine/output_data/output.csv', sep = ' ')
+car_id = 5
 all_data =[]
 frames =[]
 
