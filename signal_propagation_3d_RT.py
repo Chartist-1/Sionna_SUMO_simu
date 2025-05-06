@@ -316,11 +316,11 @@ def signal_propogation(scenario: str = 'scenario',
             new_row = pd.DataFrame([{
                 'Frame': step,
                 'Cars_Data': veh_arr,
-                'RSSI': loss,
-                'PathLoss': result
+                'PathLoss': result,
+                'RSSI': loss
             }])
             all_rssi_df = pd.concat([all_rssi_df,new_row],ignore_index=True)
-            all_rssi_df.to_csv(f'scenarios/{scenario}/output_data/output.csv',sep = ';', index = False)
+            all_rssi_df.to_csv(f'scenarios/{scenario}/output_data/output.csv',sep = ' ', index = False)
 
             
 
