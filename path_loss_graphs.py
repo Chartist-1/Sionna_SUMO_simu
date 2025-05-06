@@ -49,4 +49,4 @@ def path_loss_graphs(scenario, filename):
     # Закрытие фигуры (чтобы не занимала память)
     plt.close()
 
-path_loss_graphs("scenario_serpantine", "output50-150.csv")
+path_loss_graphs("scenario_tunnel", "output50-60.csv")
