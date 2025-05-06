@@ -179,10 +179,10 @@ def frame_handler(scene,
             else:
 
                 cam = Camera(
-                    # position=[0,0, 1000], 
-                    # look_at=[0,0,0]
-                    position=[365.2,369.65, 293.3], 
+                    position=[0,0, 2000], 
                     look_at=[0,0,0]
+                    # position=[365.2,369.65, 293.3], 
+                    # look_at=[0,0,0]
                 )
             try:
                 scene.render_to_file(
@@ -267,7 +267,7 @@ def signal_propogation(scenario: str = 'scenario',
         x_max =float(traci.simulation.getNetBoundary()[1][0])
         y_max =float(traci.simulation.getNetBoundary()[1][1])
 
-        columns = ['Frame','Cars_Data', 'RSSI']
+        columns = ['Frame','Cars_Data', 'Path Loss']
         all_rssi_df = pd.DataFrame(columns=columns)
 
         veh_arr_pred =[]
@@ -332,14 +332,14 @@ def signal_propogation(scenario: str = 'scenario',
 
 if __name__ == '__main__':
     # Example usage with custom parameters
-    scenario = 'scenario_tunnel'
+    scenario = 'scenario_serpantine'
     run_sumo_server(scenario=scenario)
     signal_propogation(
         scenario=scenario,
         begin_frame = 80,
         stop_frame = 100,
-        distance=500,
-        render=True,
+        distance=1000,
+        render=False,
         camera_default=False,
         resolution=[650,500]
     )
