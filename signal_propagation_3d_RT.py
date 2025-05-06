@@ -168,8 +168,8 @@ def frame_handler(scene,
                             rssi = np.abs(tx_power - total_power_log - fspl.item()) #Power of Tx - free space loss - power of Rx
                             frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = rssi
                         else:
-                            frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = -200  # Out of range
-                            frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0
+                            frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0  # Out of range
+                            frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = -200
                     else:
                         frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0  # Same vehicle
                         frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0
@@ -277,7 +277,7 @@ def signal_propogation(scenario: str = 'scenario',
         x_max =float(traci.simulation.getNetBoundary()[1][0])
         y_max =float(traci.simulation.getNetBoundary()[1][1])
 
-        columns = ['Frame','Cars_Data', 'RSSI']
+        columns = ['Frame','Cars_Data']
         all_rssi_df = pd.DataFrame(columns=columns)
 
         veh_arr_pred =[]
@@ -320,7 +320,7 @@ def signal_propogation(scenario: str = 'scenario',
                 'PathLoss': result
             }])
             all_rssi_df = pd.concat([all_rssi_df,new_row],ignore_index=True)
-            all_rssi_df.to_csv(f'scenarios/{scenario}/output_data/output.csv',sep = ';', index = False)
+            all_rssi_df.to_csv(f'scenarios/{scenario}/output_data/output{begin_frame}-{stop_frame}.csv',sep = ' ', index = False)
 
             
 
@@ -347,10 +347,10 @@ if __name__ == '__main__':
     run_sumo_server(scenario=scenario)
     signal_propogation(
         scenario=scenario,
-        begin_frame = 80,
-        stop_frame = 81,
-        distance=500,
-        render=True,
+        begin_frame = 50,
+        stop_frame = 150,
+        distance=1000,
+        render=False,
         camera_default=False,
         resolution=[650,500]
     )
