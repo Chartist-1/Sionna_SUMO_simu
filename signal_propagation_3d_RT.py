@@ -347,8 +347,8 @@ if __name__ == '__main__':
     run_sumo_server(scenario=scenario)
     signal_propogation(
         scenario=scenario,
-        begin_frame = 50,
-        stop_frame = 60,
+        begin_frame = 1,
+        stop_frame = 500,
         distance=1000,
         render=False,
         camera_default=False,
