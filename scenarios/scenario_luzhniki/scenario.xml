@@ -2,12 +2,36 @@
 
 <!-- Defaults, these can be set via the command line: -Darg=value -->
 
+	<default name="spp" value="4096"/>
+	<default name="resx" value="1920"/>
+	<default name="resy" value="1080"/>
 
 <!-- Camera and Rendering Parameters -->
 
 	<integrator type="path" id="elm__0" name="elm__0">
 		<integer name="max_depth" value="12"/>
 	</integrator>
+	<sensor type="perspective" id="Camera" name="Camera">
+		<string name="fov_axis" value="x"/>
+		<float name="fov" value="39.597755"/>
+		<float name="principal_point_offset_x" value="0.000000"/>
+		<float name="principal_point_offset_y" value="-0.000000"/>
+		<float name="near_clip" value="0.100000"/>
+		<float name="far_clip" value="1000.000000"/>
+		<transform name="to_world">
+			<rotate x="1" angle="104.39998104858932"/>
+			<rotate y="1" angle="4.0629010060848815e-05"/>
+			<rotate z="1" angle="-139.99995836126047"/>
+			<translate value="826.434998 -485.766998 222.710358"/>
+		</transform>
+		<sampler type="independent" name="sampler">
+			<integer name="sample_count" value="$spp"/>
+		</sampler>
+		<film type="hdrfilm" name="film">
+			<integer name="width" value="$resx"/>
+			<integer name="height" value="$resy"/>
+		</film>
+	</sensor>
 
 <!-- Materials -->
 
@@ -44,21 +68,6 @@
 	<bsdf type="diffuse" id="mat-itu_concrete" name="mat-itu_concrete">
 		<rgb value="0.086500 0.090842 0.088656" name="reflectance"/>
 	</bsdf>
-	<bsdf type="diffuse" id="mat-roads_tertiary" name="mat-roads_tertiary">
-		<rgb value="0.086500 0.090842 0.088656" name="reflectance"/>
-	</bsdf>
-	<bsdf type="diffuse" id="mat-roads_unclassified" name="mat-roads_unclassified">
-		<rgb value="0.086500 0.090842 0.088656" name="reflectance"/>
-	</bsdf>
-	<bsdf type="diffuse" id="mat-roads_primary" name="mat-roads_primary">
-		<rgb value="0.086500 0.090842 0.088656" name="reflectance"/>
-	</bsdf>
-	<bsdf type="diffuse" id="mat-roads_service" name="mat-roads_service">
-		<rgb value="0.086500 0.090842 0.088656" name="reflectance"/>
-	</bsdf>
-	<bsdf type="diffuse" id="mat-roads_residential" name="mat-roads_residential">
-		<rgb value="0.086500 0.090842 0.088656" name="reflectance"/>
-	</bsdf>
 	<bsdf type="diffuse" id="mat-itu_very_dry_ground" name="mat-itu_very_dry_ground">
 		<rgb value="1.000000 0.000000 0.300000" name="reflectance"/>
 	</bsdf>
@@ -86,25 +95,21 @@
 		<string name="filename" value="meshes/map_48_osm_roads_secondary.ply"/>
 		<ref id="mat-itu_concrete" name="bsdf"/>
 	</shape>
-	<shape type="ply" id="mesh-map_48_osm_roads_tertiary" name="mesh-map_48_osm_roads_tertiary">
-		<string name="filename" value="meshes/map_48_osm_roads_tertiary.ply"/>
-		<ref id="mat-roads_tertiary" name="bsdf"/>
-	</shape>
 	<shape type="ply" id="mesh-map_48_osm_roads_unclassified" name="mesh-map_48_osm_roads_unclassified">
 		<string name="filename" value="meshes/map_48_osm_roads_unclassified.ply"/>
-		<ref id="mat-roads_unclassified" name="bsdf"/>
+		<ref id="mat-itu_concrete" name="bsdf"/>
 	</shape>
 	<shape type="ply" id="mesh-map_48_osm_roads_primary" name="mesh-map_48_osm_roads_primary">
 		<string name="filename" value="meshes/map_48_osm_roads_primary.ply"/>
-		<ref id="mat-roads_primary" name="bsdf"/>
+		<ref id="mat-itu_concrete" name="bsdf"/>
 	</shape>
 	<shape type="ply" id="mesh-map_48_osm_roads_service" name="mesh-map_48_osm_roads_service">
 		<string name="filename" value="meshes/map_48_osm_roads_service.ply"/>
-		<ref id="mat-roads_service" name="bsdf"/>
+		<ref id="mat-itu_concrete" name="bsdf"/>
 	</shape>
 	<shape type="ply" id="mesh-map_48_osm_roads_residential" name="mesh-map_48_osm_roads_residential">
 		<string name="filename" value="meshes/map_48_osm_roads_residential.ply"/>
-		<ref id="mat-roads_residential" name="bsdf"/>
+		<ref id="mat-itu_concrete" name="bsdf"/>
 	</shape>
 	<shape type="ply" id="mesh-Terrain-itu_very_dry_ground" name="mesh-Terrain-itu_very_dry_ground">
 		<string name="filename" value="meshes/Terrain-itu_very_dry_ground.ply"/>

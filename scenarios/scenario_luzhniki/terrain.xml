@@ -35,11 +35,11 @@
 
 <!-- Shapes -->
 
-	<shape type="ply" id="elm__3" name="elm__3">
+	<shape type="ply" id="mesh-Terrain-itu_very_dry_ground" name="mesh-Terrain-itu_very_dry_ground">
 		<string name="filename" value="meshes/Terrain-itu_very_dry_ground.ply"/>
 		<ref id="mat-itu_very_dry_ground" name="bsdf"/>
 	</shape>
-	<shape type="ply" id="elm__4" name="elm__4">
+	<shape type="ply" id="mesh-Terrain-itu_metal" name="mesh-Terrain-itu_metal">
 		<string name="filename" value="meshes/Terrain-itu_metal.ply"/>
 		<ref id="mat-itu_metal" name="bsdf"/>
 	</shape>
