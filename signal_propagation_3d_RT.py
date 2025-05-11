@@ -189,10 +189,10 @@ def frame_handler(scene,
             else:
 
                 cam = Camera(
-                    position=[0,0, 2000], 
-                    look_at=[0,0,0]
-                    # position=[365.2,369.65, 293.3], 
-                    # look_at=[0,0,0]
+                    # position=[826.43,-485.76, 222.7], 
+                    # look_at=[334.50,86.23,13.11]
+                    position=[334.50,86.23,1000], 
+                    look_at=[334.50,86.23,13.11]
                 )
             try:
                 scene.render_to_file(
@@ -290,7 +290,7 @@ def signal_propogation(scenario: str = 'scenario',
 
             vehicle_ids = traci.vehicle.getIDList()
 
-            offset = [5,0]
+            offset = [0,0]
             veh_arr = []
             for vehID in vehicle_ids:
                 veh_arr.append({'vehId':vehID,
@@ -343,14 +343,14 @@ def signal_propogation(scenario: str = 'scenario',
 
 if __name__ == '__main__':
     # Example usage with custom parameters
-    scenario = 'scenario_serpantine'
+    scenario = 'scenario_luzhniki'
     run_sumo_server(scenario=scenario)
     signal_propogation(
         scenario=scenario,
         begin_frame = 80,
-        stop_frame = 100,
+        stop_frame = 150,
         distance=1000,
-        render=False,
+        render=True,
         camera_default=False,
         resolution=[650,500]
     )
