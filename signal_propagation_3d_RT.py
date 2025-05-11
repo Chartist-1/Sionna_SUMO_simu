@@ -167,11 +167,11 @@ def frame_handler(scene,
                             tx_power = 20  # dBm, typical V2X transmission power
                             rssi = np.abs(tx_power - total_power_log - fspl.item()) #Power of Tx - free space loss - power of Rx
                             frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = rssi
-                        else:
-                            frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = -200  # Out of range
-                            frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0
-                    else:
-                        frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0  # Same vehicle
+                        else: # Out of range
+                            frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0
+                            frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = -200
+                    else: # Same vehicle
+                        frame_rssi[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0  
                         frame_loss[veh_arr[i]['vehId']][veh_arr[j]['vehId']] = 0
 
         
@@ -277,7 +277,7 @@ def signal_propogation(scenario: str = 'scenario',
         x_max =float(traci.simulation.getNetBoundary()[1][0])
         y_max =float(traci.simulation.getNetBoundary()[1][1])
 
-        columns = ['Frame','Cars_Data', 'Path Loss']
+        columns = ['Frame','Cars_Data', 'PathLoss', 'RSSI']
         all_rssi_df = pd.DataFrame(columns=columns)
 
         veh_arr_pred =[]
@@ -320,7 +320,7 @@ def signal_propogation(scenario: str = 'scenario',
                 'RSSI': loss
             }])
             all_rssi_df = pd.concat([all_rssi_df,new_row],ignore_index=True)
-            all_rssi_df.to_csv(f'scenarios/{scenario}/output_data/output.csv',sep = ' ', index = False)
+            all_rssi_df.to_csv(f'scenarios/{scenario}/output_data/output{begin_frame}-{stop_frame}.csv',sep = ' ', index = False)
 
             
 
@@ -343,14 +343,14 @@ def signal_propogation(scenario: str = 'scenario',
 
 if __name__ == '__main__':
     # Example usage with custom parameters
-    scenario = 'scenario_luzhniki'
+    scenario = 'scenario_tunnel'
     run_sumo_server(scenario=scenario)
     signal_propogation(
         scenario=scenario,
-        begin_frame = 80,
-        stop_frame = 150,
+        begin_frame = 1,
+        stop_frame = 500,
         distance=1000,
-        render=True,
+        render=False,
         camera_default=False,
         resolution=[650,500]
     )
