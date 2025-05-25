@@ -191,8 +191,8 @@ def frame_handler(scene,
                 cam = Camera(
                     # position=[826.43,-485.76, 222.7], 
                     # look_at=[334.50,86.23,13.11]
-                    position=[334.50,86.23,1000], 
-                    look_at=[334.50,86.23,13.11]
+                    position=[530.29,-201.4,287.88], 
+                    look_at=[334.50,86.23,0]
                 )
             try:
                 scene.render_to_file(
@@ -343,14 +343,14 @@ def signal_propogation(scenario: str = 'scenario',
 
 if __name__ == '__main__':
     # Example usage with custom parameters
-    scenario = 'scenario_tunnel'
+    scenario = 'scenario_luzhniki_2d'
     run_sumo_server(scenario=scenario)
     signal_propogation(
         scenario=scenario,
-        begin_frame = 1,
-        stop_frame = 500,
+        begin_frame = 510,
+        stop_frame = 530,
         distance=1000,
-        render=False,
+        render=True,
         camera_default=False,
         resolution=[650,500]
     )
